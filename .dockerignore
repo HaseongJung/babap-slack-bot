@@ -1,0 +1,6 @@
+.env
+.venv
+.superpowers
+tests
+state.json
+bot.log

@@ -24,7 +24,15 @@
 
 Socket Mode라 공인 URL/포트 불필요.
 
-## Mac Studio 상시 구동 (launchd)
+## Mac Studio 상시 구동 (Docker — 권장)
+
+    touch state.json        # 최초 1회 (파일 마운트용)
+    docker compose up -d --build
+
+로그: `docker compose logs -f`. 업데이트: 코드 수정 후 위 명령 재실행.
+Socket Mode라 포트 매핑 불필요. `.env`는 compose가 자동 주입.
+
+## Mac Studio 상시 구동 (launchd — Docker 없이)
 
 `~/Library/LaunchAgents/com.slackbot.lunch.plist`:
 

@@ -1,0 +1,8 @@
+services:
+  lunchbot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./state.json:/app/state.json
+    # 로그는 docker logs (콘솔 출력)로 확인. bot.log는 컨테이너 내부에만 쌓임
