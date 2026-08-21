@@ -93,3 +93,38 @@ def test_post_menu_zero_images_still_posts_link(monkeypatch, tmp_path):
     assert ok is True
     assert calls == ["msg", "msg"]  # 본문 메시지 + 이미지 없음 안내, 파일 업로드 없음
     assert (tmp_path / "state.json").exists()
+
+
+def test_post_menu_skips_if_already_posted_today(monkeypatch, tmp_path):
+    calls = []
+    collect_calls = [0]
+
+    def fake_collect():
+        collect_calls[0] += 1
+        img = tmp_path / "menu.png"
+        img.write_bytes(b"x")
+        return (bot.menu.Article(5298, "오늘의 메뉴"), [img])
+
+    monkeypatch.setattr(bot.app.client, "chat_postMessage", lambda **kw: calls.append("msg") or {})
+    monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: calls.append("file") or {})
+    state_file = tmp_path / "state.json"
+    monkeypatch.setattr(bot, "STATE_PATH", state_file)
+    monkeypatch.setattr(bot.menu, "collect", fake_collect)
+
+    ok1, msg1 = bot.post_menu()
+    assert ok1 is True
+    assert collect_calls[0] == 1
+
+    calls.clear()
+    ok2, msg2 = bot.post_menu()
+    assert ok2 is True
+    assert "이미" in msg2
+    assert calls == []
+    assert collect_calls[0] == 1
+
+
+def test_load_state_returns_empty_on_corrupt_json(tmp_path, monkeypatch):
+    corrupt = tmp_path / "state.json"
+    corrupt.write_text("THIS IS NOT JSON{{{", encoding="utf-8")
+    monkeypatch.setattr(bot, "STATE_PATH", corrupt)
+    assert bot.load_state() == {}

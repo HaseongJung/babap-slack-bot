@@ -1,3 +1,4 @@
+import requests
 from datetime import date
 
 from menu import Article, extract_image_urls, parse_article_list
@@ -91,6 +92,8 @@ def test_collect_wires_find_download(monkeypatch):
 def test_download_images_writes_files(monkeypatch, tmp_path):
     class FakeResp:
         content = b"pngdata"
+        def raise_for_status(self):
+            pass
 
     class FakeSession:
         def get(self, url, **kw):
@@ -103,3 +106,24 @@ def test_download_images_writes_files(monkeypatch, tmp_path):
     assert len(paths) == 1
     assert paths[0].read_bytes() == b"pngdata"
     assert paths[0].name.startswith("lunch_") and paths[0].suffix == ".png"
+
+
+def test_download_images_raises_on_http_error(monkeypatch, tmp_path):
+    class ErrResp:
+        content = b"not found"
+        def raise_for_status(self):
+            raise requests.HTTPError("404")
+
+    class FakeSession:
+        def get(self, url, **kw):
+            return ErrResp()
+
+    monkeypatch.setattr(menu.tempfile, "gettempdir", lambda: str(tmp_path))
+    try:
+        menu.download_images(
+            FakeSession(), ["https://cafeptthumb-phinf.pstatic.net/a/b.png?type=w1600"]
+        )
+        assert False, "should have raised"
+    except requests.HTTPError:
+        pass
+    assert not any(tmp_path.iterdir())

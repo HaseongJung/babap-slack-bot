@@ -19,9 +19,11 @@ RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("bot.log", encoding="utf-8")],
+    handlers=[logging.StreamHandler()],
 )
 log = logging.getLogger("lunchbot")
+
+_post_lock = threading.Lock()
 
 
 def load_env(path: Path = Path(__file__).with_name(".env")) -> None:
@@ -39,15 +41,22 @@ from slack_bolt import App  # noqa: E402
 from slack_bolt.adapter.socket_mode import SocketModeHandler  # noqa: E402
 
 app = App(token=os.environ["SLACK_BOT_TOKEN"], token_verification_enabled=False)
+# skip startup auth.test so tests can import with a fake token
 CHANNEL = os.environ["SLACK_CHANNEL_ID"]
 
 
 def load_state() -> dict:
-    return json.loads(STATE_PATH.read_text(encoding="utf-8")) if STATE_PATH.exists() else {}
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        log.warning("state.json 읽기 실패, 빈 상태로 시작")
+        return {}
 
 
 def save_state(state: dict) -> None:
-    STATE_PATH.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    tmp = STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(STATE_PATH)
 
 
 def next_post_time(state: dict, now: datetime) -> datetime:
@@ -68,21 +77,26 @@ def next_after(ok: bool, state: dict, now: datetime) -> datetime:
 
 def post_menu() -> tuple[bool, str]:
     """수집해서 채널에 올리고 state를 갱신한다. (ok, 사용자용 메시지) 반환."""
-    result = menu.collect()
-    if result is None:
-        return False, "아직 오늘 메뉴가 안 올라왔어요 (보통 10:00~10:30 업로드)"
-    article, images = result
-    app.client.chat_postMessage(
-        channel=CHANNEL, text=f"🍚 *{article.subject}*\n<{article.url}|원문 보기>"
-    )
-    for p in images:
-        app.client.files_upload_v2(channel=CHANNEL, file=str(p), title=article.subject)
-        p.unlink(missing_ok=True)
-    if not images:
-        app.client.chat_postMessage(channel=CHANNEL, text="⚠️ 글은 올라왔는데 이미지가 없어요. 원문 링크만 남깁니다.")
-    save_state({"last_posted_date": datetime.now(tz=KST).date().isoformat()})
-    return True, f"업로드 완료: {article.subject} ({len(images)}장)"
-    # ponytail: 업로드 도중 실패하면 state 미갱신 → 다음 재시도에 메시지가 중복될 수 있음. 희귀 케이스라 수용.
+    with _post_lock:
+        if load_state().get("last_posted_date") == datetime.now(tz=KST).date().isoformat():
+            return True, "이미 오늘 메뉴를 보냈어요"
+        result = menu.collect()
+        if result is None:
+            return False, "아직 오늘 메뉴가 안 올라왔어요 (보통 10:00~10:30 업로드)"
+        article, images = result
+        app.client.chat_postMessage(
+            channel=CHANNEL, text=f"🍚 *{article.subject}*\n<{article.url}|원문 보기>"
+        )
+        try:
+            for p in images:
+                app.client.files_upload_v2(channel=CHANNEL, file=str(p), title=article.subject)
+        finally:
+            for p in images:
+                p.unlink(missing_ok=True)
+        if not images:
+            app.client.chat_postMessage(channel=CHANNEL, text="⚠️ 글은 올라왔는데 이미지가 없어요. 원문 링크만 남깁니다.")
+        save_state({"last_posted_date": datetime.now(tz=KST).date().isoformat()})
+        return True, f"업로드 완료: {article.subject} ({len(images)}장)"
 
 
 @app.command("/lunch")
@@ -115,6 +129,11 @@ def scheduler_loop() -> None:
 
 
 def main() -> None:
+    fh = logging.FileHandler(Path(__file__).with_name("bot.log"), encoding="utf-8")
+    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logging.getLogger().addHandler(fh)
+    app.client.auth_test()
+    log.info("Slack bot token OK")
     threading.Thread(target=scheduler_loop, daemon=True).start()
     SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
 

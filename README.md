@@ -15,7 +15,12 @@
 
 ## Slack 앱 설정
 
-Task 6 Step 1 절차(`docs/superpowers/plans/2026-08-21-slack-lunch-menu-bot.md`) 참조.
+1. [api.slack.com/apps](https://api.slack.com/apps)에서 새 앱 생성
+2. Socket Mode 활성화 → App-Level Token 생성 (`connections:write` 스코프) = `SLACK_APP_TOKEN`
+3. Bot Token Scopes: `chat:write`, `files:write`, `commands`
+4. Slash Command 생성: `/lunch`
+5. 봇을 대상 채널에 초대
+
 Socket Mode라 공인 URL/포트 불필요.
 
 ## Mac Studio 상시 구동 (launchd)

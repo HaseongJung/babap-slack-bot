@@ -85,7 +85,9 @@ def download_images(s: requests.Session, urls: list[str]) -> list[Path]:
     for i, url in enumerate(urls):
         suffix = Path(url.split("?")[0]).suffix or ".png"
         p = Path(tempfile.gettempdir()) / f"lunch_{datetime.now(tz=KST):%Y%m%d}_{i}{suffix}"
-        p.write_bytes(s.get(url, timeout=15).content)
+        r = s.get(url, timeout=15)
+        r.raise_for_status()
+        p.write_bytes(r.content)
         paths.append(p)
     return paths
 
