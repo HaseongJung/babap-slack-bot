@@ -3,6 +3,8 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      TZ: Asia/Seoul  # 로그 타임스탬프용. 스케줄 로직은 코드에서 이미 KST 고정
     volumes:
       - ./state.json:/app/state.json
     # 로그는 docker logs (콘솔 출력)로 확인. bot.log는 컨테이너 내부에만 쌓임
