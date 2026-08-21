@@ -15,7 +15,7 @@ TOMORROW_11 = datetime(2026, 8, 22, 11, 0, tzinfo=KST)
 
 
 def test_next_when_already_posted_today():
-    assert bot.next_post_time({"last_posted_date": "2026-08-21"}, dt(9)) == TOMORROW_11
+    assert bot.next_post_time({"lunch": "2026-08-21"}, dt(9)) == TOMORROW_11
 
 
 def test_next_when_not_posted_before_11():
@@ -39,7 +39,7 @@ def test_give_up_after_deadline():
 
 
 def test_next_day_after_success():
-    state = {"last_posted_date": "2026-08-21"}
+    state = {"lunch": "2026-08-21"}
     assert bot.next_after(True, state, dt(11, 0)) == TOMORROW_11
 
 
@@ -47,8 +47,8 @@ def test_state_roundtrip(tmp_path, monkeypatch):
     p = tmp_path / "state.json"
     monkeypatch.setattr(bot, "STATE_PATH", p)
     assert bot.load_state() == {}
-    bot.save_state({"last_posted_date": "2026-08-21"})
-    assert bot.load_state() == {"last_posted_date": "2026-08-21"}
+    bot.save_state({"lunch": "2026-08-21"})
+    assert bot.load_state() == {"lunch": "2026-08-21"}
 
 
 def test_post_menu_uploads_and_saves_state(monkeypatch, tmp_path):
@@ -57,23 +57,47 @@ def test_post_menu_uploads_and_saves_state(monkeypatch, tmp_path):
     monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: calls.append(("file", kw)) or {})
     img = tmp_path / "menu.png"
     img.write_bytes(b"x")
-    monkeypatch.setattr(bot.menu, "collect", lambda: (bot.menu.Article(5298, "오늘의 메뉴"), [img]))
+    seen = []
+
+    def fake_collect(image_index=None):
+        seen.append(image_index)
+        return (bot.menu.Article(5298, "오늘의 메뉴"), [img])
+
+    monkeypatch.setattr(bot.menu, "collect", fake_collect)
     monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
 
-    ok, msg = bot.post_menu()
+    ok, msg = bot.post_menu("lunch")
 
     assert ok is True
+    assert seen == [2]  # 점심 = 3번째 이미지(0-based 2)
     assert calls[0][0] == "msg" and "오늘의 메뉴" in calls[0][1]["text"]
     assert calls[1] == ("file", {"channel": "C-TEST", "file": str(img), "title": "오늘의 메뉴"})
     assert not img.exists()  # 임시파일 삭제 확인
     expected_date = datetime.now(tz=KST).date().isoformat()
     assert json.loads((tmp_path / "state.json").read_text(encoding="utf-8")) == {
-        "last_posted_date": expected_date
+        "lunch": expected_date
     }
 
 
+def test_post_menu_dinner_uses_fourth_image(monkeypatch, tmp_path):
+    img = tmp_path / "menu.png"
+    img.write_bytes(b"x")
+    seen = []
+    monkeypatch.setattr(
+        bot.menu, "collect", lambda image_index=None: (seen.append(image_index), (bot.menu.Article(1, "s"), [img]))[1]
+    )
+    monkeypatch.setattr(bot.app.client, "chat_postMessage", lambda **kw: {})
+    monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: {})
+    monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
+
+    ok, _ = bot.post_menu("dinner")
+
+    assert ok is True
+    assert seen == [3]  # 저녁 = 4번째 이미지(0-based 3)
+
+
 def test_post_menu_no_article_today(monkeypatch, tmp_path):
-    monkeypatch.setattr(bot.menu, "collect", lambda: None)
+    monkeypatch.setattr(bot.menu, "collect", lambda image_index=None: None)
     monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
     ok, msg = bot.post_menu()
     assert ok is False
@@ -85,7 +109,7 @@ def test_post_menu_zero_images_still_posts_link(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(bot.app.client, "chat_postMessage", lambda **kw: calls.append("msg") or {})
     monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: calls.append("file") or {})
-    monkeypatch.setattr(bot.menu, "collect", lambda: (bot.menu.Article(5298, "오늘의 메뉴"), []))
+    monkeypatch.setattr(bot.menu, "collect", lambda image_index=None: (bot.menu.Article(5298, "오늘의 메뉴"), []))
     monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
 
     ok, msg = bot.post_menu()
@@ -95,11 +119,12 @@ def test_post_menu_zero_images_still_posts_link(monkeypatch, tmp_path):
     assert (tmp_path / "state.json").exists()
 
 
-def test_post_menu_skips_if_already_posted_today(monkeypatch, tmp_path):
+def test_post_menu_resends_even_if_already_posted_today(monkeypatch, tmp_path):
+    """수동 호출은 중복방지에 막히지 않고 항상 다시 보낸다."""
     calls = []
     collect_calls = [0]
 
-    def fake_collect():
+    def fake_collect(image_index=None):
         collect_calls[0] += 1
         img = tmp_path / "menu.png"
         img.write_bytes(b"x")
@@ -107,20 +132,16 @@ def test_post_menu_skips_if_already_posted_today(monkeypatch, tmp_path):
 
     monkeypatch.setattr(bot.app.client, "chat_postMessage", lambda **kw: calls.append("msg") or {})
     monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: calls.append("file") or {})
-    state_file = tmp_path / "state.json"
-    monkeypatch.setattr(bot, "STATE_PATH", state_file)
+    monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
     monkeypatch.setattr(bot.menu, "collect", fake_collect)
 
-    ok1, msg1 = bot.post_menu()
-    assert ok1 is True
-    assert collect_calls[0] == 1
+    ok1, _ = bot.post_menu("lunch")
+    ok2, msg2 = bot.post_menu("lunch")
 
-    calls.clear()
-    ok2, msg2 = bot.post_menu()
-    assert ok2 is True
-    assert "이미" in msg2
-    assert calls == []
-    assert collect_calls[0] == 1
+    assert ok1 is True and ok2 is True
+    assert collect_calls[0] == 2  # 두 번 다 수집 실행
+    assert "완료" in msg2
+    assert calls.count("msg") == 2 and calls.count("file") == 2
 
 
 def test_load_state_returns_empty_on_corrupt_json(tmp_path, monkeypatch):

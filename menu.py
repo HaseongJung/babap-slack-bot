@@ -92,13 +92,20 @@ def download_images(s: requests.Session, urls: list[str]) -> list[Path]:
     return paths
 
 
-def collect() -> tuple[Article, list[Path]] | None:
-    """오늘 바른밥상 글을 찾아 이미지를 임시 디렉터리에 내려받는다."""
+def collect(image_index: int | None = None) -> tuple[Article, list[Path]] | None:
+    """오늘 바른밥상 글을 찾아 이미지를 임시 디렉터리에 내려받는다.
+
+    image_index: 0-based. 지정하면 그 순서의 이미지 1장만 내려받는다
+    (점심=2, 저녁=3 — 카페 게시 패턴). 범위 밖이면 빈 리스트.
+    """
     s = _session()
     article = find_today_article(s)
     if article is None:
         return None
-    return article, download_images(s, get_image_urls(s, article))
+    urls = get_image_urls(s, article)
+    if image_index is not None:
+        urls = urls[image_index : image_index + 1]
+    return article, download_images(s, urls)
 
 
 if __name__ == "__main__":

@@ -89,6 +89,26 @@ def test_collect_wires_find_download(monkeypatch):
     assert menu.collect() == (art, [Path("/tmp/a"), Path("/tmp/b")])
 
 
+def test_collect_selects_single_image_by_index(monkeypatch):
+    art = menu.Article(5298, "오늘의 메뉴")
+    monkeypatch.setattr(menu, "find_today_article", lambda s: art)
+    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1", "u2", "u3", "u4"])
+    seen = []
+    monkeypatch.setattr(menu, "download_images", lambda s, urls: seen.append(urls) or [Path("/tmp/only")])
+    assert menu.collect(image_index=2) == (art, [Path("/tmp/only")])
+    assert seen == [["u3"]]
+
+
+def test_collect_out_of_range_index_yields_no_images(monkeypatch):
+    art = menu.Article(5298, "오늘의 메뉴")
+    monkeypatch.setattr(menu, "find_today_article", lambda s: art)
+    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1", "u2", "u3"])
+    seen = []
+    monkeypatch.setattr(menu, "download_images", lambda s, urls: seen.append(urls) or [])
+    assert menu.collect(image_index=3) == (art, [])
+    assert seen == [[]]
+
+
 def test_download_images_writes_files(monkeypatch, tmp_path):
     class FakeResp:
         content = b"pngdata"

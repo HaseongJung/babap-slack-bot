@@ -15,6 +15,8 @@ STATE_PATH = Path(__file__).with_name("state.json")
 POST_HOUR = 11       # 매일 자동 포스팅 시각
 DEADLINE_HOUR = 13   # 이 시각부터는 재시도 안 함
 RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
+AUTO_POST_ENABLED = False  # ponytail: 자동 포스팅 로직 보존용. 켜면 매일 11시 점심만 발송
+MENU_IMAGE_INDEX = {"lunch": 2, "dinner": 3}  # 0-based: 3번째 사진=점심, 4번째=저녁
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,7 +65,7 @@ def next_post_time(state: dict, now: datetime) -> datetime:
     """다음 자동 포스팅 목표 시각. 오늘 완료했거나 마감 지났으면 내일 11시."""
     today = now.date()
     tomorrow = datetime.combine(today + timedelta(days=1), dtime(POST_HOUR), tzinfo=KST)
-    if state.get("last_posted_date") == today.isoformat() or now.hour >= DEADLINE_HOUR:
+    if state.get("lunch") == today.isoformat() or now.hour >= DEADLINE_HOUR:
         return tomorrow
     return max(datetime.combine(today, dtime(POST_HOUR), tzinfo=KST), now)
 
@@ -75,12 +77,13 @@ def next_after(ok: bool, state: dict, now: datetime) -> datetime:
     return next_post_time(state, now)
 
 
-def post_menu() -> tuple[bool, str]:
-    """수집해서 채널에 올리고 state를 갱신한다. (ok, 사용자용 메시지) 반환."""
+def post_menu(menu_key: str = "lunch") -> tuple[bool, str]:
+    """수집해서 채널에 올리고 state를 갱신한다. (ok, 사용자용 메시지) 반환.
+
+    수동 호출 기준: 이미 보냈어도 다시 보내준다 (state는 자동 포스팅용 기록).
+    """
     with _post_lock:
-        if load_state().get("last_posted_date") == datetime.now(tz=KST).date().isoformat():
-            return True, "이미 오늘 메뉴를 보냈어요"
-        result = menu.collect()
+        result = menu.collect(image_index=MENU_IMAGE_INDEX[menu_key])
         if result is None:
             return False, "아직 오늘 메뉴가 안 올라왔어요 (보통 10:00~10:30 업로드)"
         article, images = result
@@ -95,19 +98,31 @@ def post_menu() -> tuple[bool, str]:
                 p.unlink(missing_ok=True)
         if not images:
             app.client.chat_postMessage(channel=CHANNEL, text="⚠️ 글은 올라왔는데 이미지가 없어요. 원문 링크만 남깁니다.")
-        save_state({"last_posted_date": datetime.now(tz=KST).date().isoformat()})
+        state = load_state()
+        state[menu_key] = datetime.now(tz=KST).date().isoformat()
+        save_state(state)
         return True, f"업로드 완료: {article.subject} ({len(images)}장)"
+
+
+def _post_and_respond(respond, menu_key: str) -> None:
+    try:
+        _, msg = post_menu(menu_key)
+    except Exception:
+        log.exception("수동 호출 실패")
+        msg = "오류가 났어요. 로그(bot.log)를 확인해 주세요."
+    respond(msg)
 
 
 @app.command("/lunch")
 def lunch(ack, respond):
     ack()
-    try:
-        _, msg = post_menu()
-    except Exception:
-        log.exception("수동 호출 실패")
-        msg = "오류가 났어요. 로그(bot.log)를 확인해 주세요."
-    respond(msg)
+    _post_and_respond(respond, "lunch")
+
+
+@app.command("/dinner")
+def dinner(ack, respond):
+    ack()
+    _post_and_respond(respond, "dinner")
 
 
 def scheduler_loop() -> None:
@@ -134,7 +149,10 @@ def main() -> None:
     logging.getLogger().addHandler(fh)
     app.client.auth_test()
     log.info("Slack bot token OK")
-    threading.Thread(target=scheduler_loop, daemon=True).start()
+    if AUTO_POST_ENABLED:
+        threading.Thread(target=scheduler_loop, daemon=True).start()
+    else:
+        log.info("자동 포스팅 비활성화 (AUTO_POST_ENABLED=False)")
     SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
 
 
