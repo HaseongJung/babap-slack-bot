@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -48,3 +49,47 @@ def test_state_roundtrip(tmp_path, monkeypatch):
     assert bot.load_state() == {}
     bot.save_state({"last_posted_date": "2026-08-21"})
     assert bot.load_state() == {"last_posted_date": "2026-08-21"}
+
+
+def test_post_menu_uploads_and_saves_state(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(bot.app.client, "chat_postMessage", lambda **kw: calls.append(("msg", kw)) or {})
+    monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: calls.append(("file", kw)) or {})
+    img = tmp_path / "menu.png"
+    img.write_bytes(b"x")
+    monkeypatch.setattr(bot.menu, "collect", lambda: (bot.menu.Article(5298, "오늘의 메뉴"), [img]))
+    monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
+
+    ok, msg = bot.post_menu()
+
+    assert ok is True
+    assert calls[0][0] == "msg" and "오늘의 메뉴" in calls[0][1]["text"]
+    assert calls[1] == ("file", {"channel": "C-TEST", "file": str(img), "title": "오늘의 메뉴"})
+    assert not img.exists()  # 임시파일 삭제 확인
+    expected_date = datetime.now(tz=KST).date().isoformat()
+    assert json.loads((tmp_path / "state.json").read_text(encoding="utf-8")) == {
+        "last_posted_date": expected_date
+    }
+
+
+def test_post_menu_no_article_today(monkeypatch, tmp_path):
+    monkeypatch.setattr(bot.menu, "collect", lambda: None)
+    monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
+    ok, msg = bot.post_menu()
+    assert ok is False
+    assert "안 올라왔" in msg
+    assert not (tmp_path / "state.json").exists()
+
+
+def test_post_menu_zero_images_still_posts_link(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(bot.app.client, "chat_postMessage", lambda **kw: calls.append("msg") or {})
+    monkeypatch.setattr(bot.app.client, "files_upload_v2", lambda **kw: calls.append("file") or {})
+    monkeypatch.setattr(bot.menu, "collect", lambda: (bot.menu.Article(5298, "오늘의 메뉴"), []))
+    monkeypatch.setattr(bot, "STATE_PATH", tmp_path / "state.json")
+
+    ok, msg = bot.post_menu()
+
+    assert ok is True
+    assert calls == ["msg", "msg"]  # 본문 메시지 + 이미지 없음 안내, 파일 업로드 없음
+    assert (tmp_path / "state.json").exists()
