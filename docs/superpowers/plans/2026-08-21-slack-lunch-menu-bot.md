@@ -253,7 +253,7 @@ def extract_image_urls(content_html: str) -> list[str]:
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `uv run pytest tests/test_menu.py -v`
-Expected: 6 passed
+Expected: 5 passed
 
 - [ ] **Step 5: Commit**
 
@@ -403,7 +403,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `uv run pytest tests/test_menu.py -v`
-Expected: 9 passed
+Expected: 8 passed
 
 - [ ] **Step 5: 실제 카페 대상 라이브 검증 (Slack 토큰 불필요)**
 
@@ -737,7 +737,7 @@ if __name__ == "__main__":
 - [ ] **Step 5: 전체 테스트 통과 확인**
 
 Run: `uv run pytest -v`
-Expected: 20 passed (menu 9 + bot 11)
+Expected: 19 passed (menu 8 + bot 11)
 
 - [ ] **Step 6: Commit**
 
@@ -848,7 +848,7 @@ Socket Mode라 공인 URL/포트 불필요.
 - [ ] **Step 5: 최종 확인 + Commit**
 
 Run: `uv run pytest -v`
-Expected: 20 passed
+Expected: 19 passed
 
 ```bash
 git add README.md
