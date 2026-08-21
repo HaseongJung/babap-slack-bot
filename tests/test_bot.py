@@ -11,11 +11,11 @@ def dt(h, m=0):
     return datetime(2026, 8, 21, h, m, tzinfo=KST)  # 금요일
 
 
-TOMORROW_11 = datetime(2026, 8, 22, 11, 0, tzinfo=KST)
+NEXT_11 = datetime(2026, 8, 24, 11, 0, tzinfo=KST)  # 주말 건너뛴 다음 월요일
 
 
 def test_next_when_already_posted_today():
-    assert bot.next_post_time({"lunch": "2026-08-21"}, dt(9)) == TOMORROW_11
+    assert bot.next_post_time({"lunch": "2026-08-21"}, dt(9)) == NEXT_11
 
 
 def test_next_when_not_posted_before_11():
@@ -27,7 +27,7 @@ def test_next_when_missed_but_before_deadline():
 
 
 def test_next_when_past_deadline():
-    assert bot.next_post_time({}, dt(13, 30)) == TOMORROW_11
+    assert bot.next_post_time({}, dt(13, 30)) == NEXT_11
 
 
 def test_retry_10min_after_failed_attempt():
@@ -35,12 +35,29 @@ def test_retry_10min_after_failed_attempt():
 
 
 def test_give_up_after_deadline():
-    assert bot.next_after(False, {}, dt(13, 0)) == TOMORROW_11
+    assert bot.next_after(False, {}, dt(13, 0)) == NEXT_11
 
 
 def test_next_day_after_success():
     state = {"lunch": "2026-08-21"}
-    assert bot.next_after(True, state, dt(11, 0)) == TOMORROW_11
+    assert bot.next_after(True, state, dt(11, 0)) == NEXT_11
+
+
+def test_skips_weekend_to_monday():
+    saturday = datetime(2026, 8, 22, 9, tzinfo=KST)
+    assert bot.next_post_time({}, saturday) == NEXT_11
+
+
+def test_skips_holiday_run():
+    """2026-08-15(토) 광복절 + 08-17(월) 대체공휴일 → 다음 영업일은 08-18(화)."""
+    friday_after_deadline = datetime(2026, 8, 14, 13, 30, tzinfo=KST)
+    assert bot.next_post_time({}, friday_after_deadline) == datetime(2026, 8, 18, 11, 0, tzinfo=KST)
+
+
+def test_skips_lunar_new_year_run():
+    """2026 설날 연휴 02-16~18(월~수) → 02-13(금) 이후 다음 영업일은 02-19(목)."""
+    friday_after_deadline = datetime(2026, 2, 13, 13, 30, tzinfo=KST)
+    assert bot.next_post_time({}, friday_after_deadline) == datetime(2026, 2, 19, 11, 0, tzinfo=KST)
 
 
 def test_state_roundtrip(tmp_path, monkeypatch):

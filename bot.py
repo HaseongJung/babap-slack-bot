@@ -6,16 +6,19 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, time as dtime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import holidays
+
 KST = ZoneInfo("Asia/Seoul")
+KR_HOLIDAYS = holidays.country_holidays("KR")  # 음력·대체공휴일 포함, 연도별 자동 확장
 STATE_PATH = Path(__file__).with_name("state.json")
 POST_HOUR = 11       # 매일 자동 포스팅 시각
 DEADLINE_HOUR = 13   # 이 시각부터는 재시도 안 함
 RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
-AUTO_POST_ENABLED = False  # ponytail: 자동 포스팅 로직 보존용. 켜면 매일 11시 점심만 발송
+AUTO_POST_ENABLED = True  # 평일(공휴일 제외) 11시에 점심만 자동 발송
 MENU_IMAGE_INDEX = {"lunch": 2, "dinner": 3}  # 0-based: 3번째 사진=점심, 4번째=저녁
 
 logging.basicConfig(
@@ -61,12 +64,24 @@ def save_state(state: dict) -> None:
     tmp.replace(STATE_PATH)
 
 
+def is_business_day(d: date) -> bool:
+    """KST 기준 평일이고 공휴일이 아닌 날."""
+    return d.weekday() < 5 and d not in KR_HOLIDAYS
+
+
+def next_business_day(d: date) -> date:
+    d += timedelta(days=1)
+    while not is_business_day(d):
+        d += timedelta(days=1)
+    return d
+
+
 def next_post_time(state: dict, now: datetime) -> datetime:
-    """다음 자동 포스팅 목표 시각. 오늘 완료했거나 마감 지났으면 내일 11시."""
+    """다음 자동 포스팅 목표 시각. 오늘 끝났거나 휴일이면 다음 영업일 11시."""
     today = now.date()
-    tomorrow = datetime.combine(today + timedelta(days=1), dtime(POST_HOUR), tzinfo=KST)
-    if state.get("lunch") == today.isoformat() or now.hour >= DEADLINE_HOUR:
-        return tomorrow
+    done = state.get("lunch") == today.isoformat() or now.hour >= DEADLINE_HOUR
+    if done or not is_business_day(today):
+        return datetime.combine(next_business_day(today), dtime(POST_HOUR), tzinfo=KST)
     return max(datetime.combine(today, dtime(POST_HOUR), tzinfo=KST), now)
 
 
