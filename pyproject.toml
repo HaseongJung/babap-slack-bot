@@ -1,0 +1,16 @@
+[project]
+name = "slack-lunch-bot"
+version = "0.1.0"
+description = "네이버 카페 바른밥상 점심메뉴 Slack 봇"
+requires-python = ">=3.12"
+dependencies = [
+    "slack-bolt>=1.20",
+    "requests>=2.32",
+    "tzdata>=2024.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
