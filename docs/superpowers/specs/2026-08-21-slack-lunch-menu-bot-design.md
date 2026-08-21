@@ -8,7 +8,7 @@
 네이버 카페 "2판교 라이프"의 `Today 밥집 메뉴` 게시판에서 **판교이노베이션랩 "바른밥상"** 일일 점심메뉴 글을 수집하여, 회사 Slack 채널에:
 
 1. **자동 포스팅** — 매일 오전 11:00 (KST)
-2. **수동 호출** — `/점심` 슬래시 커맨드 입력 시 즉시 응답
+2. **수동 호출** — `/lunch` 슬래시 커맨드 입력 시 즉시 응답 (Slack 커맨드명은 ASCII 소문자만 허용되어 한글 불가)
 
 ## 검증된 사실 (2026-08-21 실측)
 
@@ -61,7 +61,7 @@ slack_bot/
 5. Slack 채널에 메시지(제목+원문 링크) + 이미지 파일 업로드
 6. `last_posted_date` 갱신
 
-### 수동 호출 (`/점심`)
+### 수동 호출 (`/lunch`)
 
 - 같은 수집 로직 즉시 실행
 - 글이 아직 없으면 "아직 오늘 메뉴가 안 올라왔어요 (보통 10:00~10:30 업로드)" ephemeral 응답
@@ -79,7 +79,7 @@ slack_bot/
 1. api.slack.com/apps → 새 앱 생성
 2. Socket Mode 활성화 → App-Level Token (`connections:write`) = `SLACK_APP_TOKEN`
 3. Bot Token Scopes: `chat:write`, `files:write`, `commands`
-4. Slash Command: `/점심`
+4. Slash Command: `/lunch`
 5. 봇을 대상 채널에 초대
 
 ## 에러 처리
