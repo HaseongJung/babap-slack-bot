@@ -2,9 +2,15 @@
 from __future__ import annotations
 
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 CAFE_ID = 30487307
 MENU_ID = 26
@@ -44,3 +50,60 @@ def parse_article_list(data: dict, today: date) -> Article | None:
 def extract_image_urls(content_html: str) -> list[str]:
     """본문 HTML에서 cafeptthumb(카페 본문 이미지 CDN) URL만 순서대로."""
     return re.findall(r'<img[^>]+src="(https://cafeptthumb[^"]+)"', content_html)
+
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://cafe.naver.com/",
+}
+
+
+def _session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    return s
+
+
+def find_today_article(s: requests.Session) -> Article | None:
+    data = s.get(LIST_URL, timeout=10).json()
+    return parse_article_list(data, datetime.now(tz=KST).date())
+
+
+def get_image_urls(s: requests.Session, article: Article) -> list[str]:
+    data = s.get(ARTICLE_URL.format(aid=article.article_id), timeout=10).json()
+    html = data.get("result", {}).get("article", {}).get("contentHtml", "")
+    return extract_image_urls(html)
+
+
+def download_images(s: requests.Session, urls: list[str]) -> list[Path]:
+    paths = []
+    for i, url in enumerate(urls):
+        suffix = Path(url.split("?")[0]).suffix or ".png"
+        p = Path(tempfile.gettempdir()) / f"lunch_{datetime.now(tz=KST):%Y%m%d}_{i}{suffix}"
+        p.write_bytes(s.get(url, timeout=15).content)
+        paths.append(p)
+    return paths
+
+
+def collect() -> tuple[Article, list[Path]] | None:
+    """오늘 바른밥상 글을 찾아 이미지를 임시 디렉터리에 내려받는다."""
+    s = _session()
+    article = find_today_article(s)
+    if article is None:
+        return None
+    return article, download_images(s, get_image_urls(s, article))
+
+
+if __name__ == "__main__":
+    result = collect()
+    if result is None:
+        print("오늘 글 없음")
+    else:
+        a, imgs = result
+        print(f"{a.article_id} | {a.subject}\n{a.url}")
+        print("\n".join(str(p) for p in imgs))

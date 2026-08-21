@@ -67,3 +67,39 @@ def test_extract_image_urls_only_cafeptthumb_in_order():
 
 def test_extract_image_urls_empty():
     assert extract_image_urls("<p>텍스트만</p>") == []
+
+
+# Task 3: I/O tests
+from pathlib import Path
+
+import menu
+
+
+def test_collect_returns_none_when_no_article(monkeypatch):
+    monkeypatch.setattr(menu, "find_today_article", lambda s: None)
+    assert menu.collect() is None
+
+
+def test_collect_wires_find_download(monkeypatch):
+    art = menu.Article(5298, "오늘의 메뉴")
+    monkeypatch.setattr(menu, "find_today_article", lambda s: art)
+    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1", "u2"])
+    monkeypatch.setattr(menu, "download_images", lambda s, urls: [Path("/tmp/a"), Path("/tmp/b")])
+    assert menu.collect() == (art, [Path("/tmp/a"), Path("/tmp/b")])
+
+
+def test_download_images_writes_files(monkeypatch, tmp_path):
+    class FakeResp:
+        content = b"pngdata"
+
+    class FakeSession:
+        def get(self, url, **kw):
+            return FakeResp()
+
+    monkeypatch.setattr(menu.tempfile, "gettempdir", lambda: str(tmp_path))
+    paths = menu.download_images(
+        FakeSession(), ["https://cafeptthumb-phinf.pstatic.net/a/b.png?type=w1600"]
+    )
+    assert len(paths) == 1
+    assert paths[0].read_bytes() == b"pngdata"
+    assert paths[0].name.startswith("lunch_") and paths[0].suffix == ".png"
