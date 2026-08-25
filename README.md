@@ -26,7 +26,6 @@ Socket Mode라 공인 URL/포트 불필요.
 
 ## Mac Studio 상시 구동 (Docker — 권장)
 
-    touch state.json        # 최초 1회 (파일 마운트용)
     docker compose up -d --build
 
 로그: `docker compose logs -f`. 업데이트: 코드 수정 후 위 명령 재실행.
@@ -65,7 +64,8 @@ Socket Mode라 포트 매핑 불필요. `.env`는 compose가 자동 주입.
 | 자동 포스팅 시각 | `bot.py` `POST_HOUR` | 11 |
 | 재시도 마감 | `bot.py` `DEADLINE_HOUR` | 13 |
 | 재시도 간격(분) | `bot.py` `RETRY_MIN` | 10 |
+| 재시도 최대 횟수 | `bot.py` `RETRY_MAX` | 2 |
 | 점심/저녁 이미지 순번 | `bot.py` `MENU_IMAGE_INDEX` | lunch=2, dinner=3 (0-based) |
 | 대상 식당 키워드 | `menu.py` `KEYWORD` | 바른밥상 |
 
-로그: 콘솔 + `bot.log`. 중복방지 상태: `state.json`.
+로그: 콘솔 + `bot.log`. 중복방지 상태: `state/state.json` (디렉터리 마운트).

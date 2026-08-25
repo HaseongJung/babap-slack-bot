@@ -4,6 +4,7 @@ __pycache__/
 .env
 bot.log
 state.json
+state/
 .playwright-mcp/
 .superpowers/
 .playwright-mcp/

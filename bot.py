@@ -14,10 +14,11 @@ import holidays
 
 KST = ZoneInfo("Asia/Seoul")
 KR_HOLIDAYS = holidays.country_holidays("KR")  # 음력·대체공휴일 포함, 연도별 자동 확장
-STATE_PATH = Path(__file__).with_name("state.json")
+STATE_PATH = Path(__file__).with_name("state") / "state.json"
 POST_HOUR = 11       # 매일 자동 포스팅 시각
 DEADLINE_HOUR = 13   # 이 시각부터는 재시도 안 함
 RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
+RETRY_MAX = 2        # 재시도 최대 횟수 (초기 1회 + 2회 = 하루 최대 3회 시도)
 AUTO_POST_ENABLED = True  # 평일(공휴일 제외) 11시에 점심만 자동 발송
 MENU_IMAGE_INDEX = {"lunch": 2, "dinner": 3}  # 0-based: 3번째 사진=점심, 4번째=저녁
 
@@ -59,6 +60,7 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
+    STATE_PATH.parent.mkdir(exist_ok=True)
     tmp = STATE_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
     tmp.replace(STATE_PATH)
@@ -85,11 +87,14 @@ def next_post_time(state: dict, now: datetime) -> datetime:
     return max(datetime.combine(today, dtime(POST_HOUR), tzinfo=KST), now)
 
 
-def next_after(ok: bool, state: dict, now: datetime) -> datetime:
-    """포스팅 시도 1회 후의 다음 시각. 실패+마감 전이면 10분 뒤 재시도."""
-    if not ok and now.hour < DEADLINE_HOUR:
+def next_after(ok: bool, now: datetime, fails: int = 0) -> datetime:
+    """포스팅 시도 1회 후의 다음 시각. 재시도 남음이면 10분 뒤, 아니면 다음 영업일 11시.
+
+    fails: 오늘 연속 실패 횟수(방금 실패 포함). RETRY_MAX 초과면 포기.
+    """
+    if not ok and now.hour < DEADLINE_HOUR and fails <= RETRY_MAX:
         return now + timedelta(minutes=RETRY_MIN)
-    return next_post_time(state, now)
+    return datetime.combine(next_business_day(now.date()), dtime(POST_HOUR), tzinfo=KST)
 
 
 def post_menu(menu_key: str = "lunch") -> tuple[bool, str]:
@@ -142,6 +147,7 @@ def dinner(ack, respond):
 
 def scheduler_loop() -> None:
     next_run = next_post_time(load_state(), datetime.now(tz=KST))
+    fails = 0
     log.info("스케줄러 시작, 다음 실행: %s", next_run.isoformat())
     while True:
         now = datetime.now(tz=KST)
@@ -155,7 +161,11 @@ def scheduler_loop() -> None:
         except Exception:
             log.exception("자동 포스팅 실패")
             ok = False
-        next_run = next_after(ok, load_state(), datetime.now(tz=KST))
+        finished = datetime.now(tz=KST)
+        fails = 0 if ok else fails + 1
+        next_run = next_after(ok, finished, fails)
+        if next_run.date() != finished.date():
+            fails = 0  # 다음 날로 넘어갔으면 재시도 카운터 초기화
 
 
 def main() -> None:

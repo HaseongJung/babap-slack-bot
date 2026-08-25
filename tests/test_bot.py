@@ -31,16 +31,26 @@ def test_next_when_past_deadline():
 
 
 def test_retry_10min_after_failed_attempt():
-    assert bot.next_after(False, {}, dt(11, 0)) == dt(11, 10)
+    assert bot.next_after(False, dt(11, 0)) == dt(11, 10)
+
+
+def test_retry_within_cap():
+    """재시도 2번까지는 10분 간격 재시도 (11:00 실패 → 11:10, 11:20 시도)."""
+    assert bot.next_after(False, dt(11, 0), fails=1) == dt(11, 10)
+    assert bot.next_after(False, dt(11, 10), fails=2) == dt(11, 20)
+
+
+def test_give_up_after_retry_cap():
+    """3번 연속 실패(초기 1회 + 재시도 2회)면 다음 영업일로 넘어간다."""
+    assert bot.next_after(False, dt(11, 20), fails=3) == NEXT_11
 
 
 def test_give_up_after_deadline():
-    assert bot.next_after(False, {}, dt(13, 0)) == NEXT_11
+    assert bot.next_after(False, dt(13, 0)) == NEXT_11
 
 
 def test_next_day_after_success():
-    state = {"lunch": "2026-08-21"}
-    assert bot.next_after(True, state, dt(11, 0)) == NEXT_11
+    assert bot.next_after(True, dt(11, 0)) == NEXT_11
 
 
 def test_skips_weekend_to_monday():
