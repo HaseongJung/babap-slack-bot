@@ -81,7 +81,7 @@ HEADERS = {
 # ── Ollama ─────────────────────────────────────────────
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
 OLLAMA_TIMEOUT = 30  # 초
 
 # ── 로깅 ───────────────────────────────────────────────────
