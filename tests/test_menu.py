@@ -1,4 +1,4 @@
-import requests
+from curl_cffi import requests
 from datetime import date
 
 from menu import Article, extract_image_urls, parse_article_list
@@ -132,7 +132,7 @@ def test_download_images_raises_on_http_error(monkeypatch, tmp_path):
     class ErrResp:
         content = b"not found"
         def raise_for_status(self):
-            raise requests.HTTPError("404")
+            raise requests.errors.RequestsError("404")
 
     class FakeSession:
         def get(self, url, **kw):
@@ -144,6 +144,6 @@ def test_download_images_raises_on_http_error(monkeypatch, tmp_path):
             FakeSession(), ["https://cafeptthumb-phinf.pstatic.net/a/b.png?type=w1600"]
         )
         assert False, "should have raised"
-    except requests.HTTPError:
+    except requests.errors.RequestsError:
         pass
     assert not any(tmp_path.iterdir())

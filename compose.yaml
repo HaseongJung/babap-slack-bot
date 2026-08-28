@@ -5,6 +5,10 @@ services:
     env_file: .env
     environment:
       TZ: Asia/Seoul  # 로그 타임스탬프용. 스케줄 로직은 코드에서 이미 KST 고정
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen2.5:3b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./state:/app/state  # 디렉터리 마운트. 단일 파일 마운트는 rename(원자적 쓰기)과 안 맞음
     # 로그는 docker logs (콘솔 출력)로 확인. bot.log는 컨테이너 내부에만 쌓임

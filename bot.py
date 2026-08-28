@@ -7,48 +7,33 @@ import os
 import threading
 import time
 from datetime import date, datetime, time as dtime, timedelta
-from pathlib import Path
-from zoneinfo import ZoneInfo
 
-import holidays
+from slack_bolt import App
+from slack_bolt.adapter.socket_mode import SocketModeHandler
 
-KST = ZoneInfo("Asia/Seoul")
-KR_HOLIDAYS = holidays.country_holidays("KR")  # 음력·대체공휴일 포함, 연도별 자동 확장
-STATE_PATH = Path(__file__).with_name("state") / "state.json"
-POST_HOUR = 11       # 매일 자동 포스팅 시각
-DEADLINE_HOUR = 13   # 이 시각부터는 재시도 안 함
-RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
-RETRY_MAX = 2        # 재시도 최대 횟수 (초기 1회 + 2회 = 하루 최대 3회 시도)
-AUTO_POST_ENABLED = True  # 평일(공휴일 제외) 11시에 점심만 자동 발송
-MENU_IMAGE_INDEX = {"lunch": 2, "dinner": 3}  # 0-based: 3번째 사진=점심, 4번째=저녁
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.StreamHandler()],
+import menu
+import summarizer
+from config import (
+    AUTO_POST_ENABLED,
+    DEADLINE_HOUR,
+    KST,
+    KR_HOLIDAYS,
+    MENU_IMAGE_INDEX,
+    POST_HOUR,
+    RETRY_MAX,
+    RETRY_MIN,
+    SLACK_APP_TOKEN,
+    SLACK_BOT_TOKEN,
+    SLACK_CHANNEL_ID,
+    STATE_PATH,
+    setup_logging,
 )
+
+app = App(token=SLACK_BOT_TOKEN, token_verification_enabled=False)
+CHANNEL = SLACK_CHANNEL_ID
 log = logging.getLogger("lunchbot")
 
 _post_lock = threading.Lock()
-
-
-def load_env(path: Path = Path(__file__).with_name(".env")) -> None:
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
-
-
-load_env()
-
-import menu  # noqa: E402
-from slack_bolt import App  # noqa: E402
-from slack_bolt.adapter.socket_mode import SocketModeHandler  # noqa: E402
-
-app = App(token=os.environ["SLACK_BOT_TOKEN"], token_verification_enabled=False)
-# skip startup auth.test so tests can import with a fake token
-CHANNEL = os.environ["SLACK_CHANNEL_ID"]
 
 
 def load_state() -> dict:
@@ -145,6 +130,35 @@ def dinner(ack, respond):
     _post_and_respond(respond, "dinner")
 
 
+@app.event("message")
+def handle_message(event, client):
+    """채널 메시지에 URL이 포함되면 Ollama로 요약해 thread reply."""
+    if event.get("bot_id"):
+        return
+    text = event.get("text", "")
+    if not text:
+        return
+
+    channel = event["channel"]
+    thread_ts = event["ts"]
+
+    def _summarize_and_reply():
+        result = summarizer.handle_url_message(text)
+        if result is None:
+            return
+        url, summary = result
+        try:
+            client.chat_postMessage(
+                channel=channel,
+                text=f"📰 *요약* (<{url}|원문>)\n\n{summary}",
+                thread_ts=thread_ts,
+            )
+        except Exception:
+            log.exception("요약 reply 실패")
+
+    threading.Thread(target=_summarize_and_reply, daemon=True).start()
+
+
 def scheduler_loop() -> None:
     next_run = next_post_time(load_state(), datetime.now(tz=KST))
     fails = 0
@@ -169,16 +183,14 @@ def scheduler_loop() -> None:
 
 
 def main() -> None:
-    fh = logging.FileHandler(Path(__file__).with_name("bot.log"), encoding="utf-8")
-    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    logging.getLogger().addHandler(fh)
+    setup_logging()
     app.client.auth_test()
     log.info("Slack bot token OK")
     if AUTO_POST_ENABLED:
         threading.Thread(target=scheduler_loop, daemon=True).start()
     else:
         log.info("자동 포스팅 비활성화 (AUTO_POST_ENABLED=False)")
-    SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
+    SocketModeHandler(app, SLACK_APP_TOKEN).start()
 
 
 if __name__ == "__main__":

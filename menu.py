@@ -8,22 +8,15 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+from curl_cffi import requests
 
-CAFE_ID = 30487307
-MENU_ID = 26
-KEYWORD = "바른밥상"  # ponytail: 타 식당 추가 시 이 키워드 목록만 손대면 됨
-KST = ZoneInfo("Asia/Seoul")
-
-LIST_URL = (
-    f"https://apis.naver.com/cafe-web/cafe-boardlist-api/v1/cafes/{CAFE_ID}"
-    f"/menus/{MENU_ID}/articles?page=1&pageSize=15&sortBy=TIME&viewType=L"
-)
-ARTICLE_URL = (
-    f"https://article.cafe.naver.com/gw/v4/cafes/{CAFE_ID}/articles/{{aid}}"
-    f"?query=&menuId={MENU_ID}&boardType=L&useCafeId=true&requestFrom=A"
+from config import (
+    ARTICLE_URL,
+    CAFE_ID,
+    HEADERS,
+    KEYWORD,
+    KST,
+    LIST_URL,
 )
 
 
@@ -52,20 +45,9 @@ def extract_image_urls(content_html: str) -> list[str]:
     return re.findall(r'<img[^>]+src="(https://cafeptthumb[^"]+)"', content_html)
 
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://cafe.naver.com/",
-}
-
-
 def _session() -> requests.Session:
-    s = requests.Session()
+    s = requests.Session(impersonate="chrome")
     s.headers.update(HEADERS)
-    retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-    s.mount("https://", HTTPAdapter(max_retries=retry))
     return s
 
 
