@@ -49,6 +49,7 @@ def summarize(text: str) -> str | None:
                 "model": OLLAMA_MODEL,
                 "prompt": f"다음 글을 3~5줄 이내로 핵심만 요약해:\n\n{text}",
                 "stream": False,
+                "keep_alive": "10m",
             },
             timeout=OLLAMA_TIMEOUT,
         )
