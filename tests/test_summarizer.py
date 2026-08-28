@@ -83,6 +83,14 @@ class TestSummarize:
     def test_returns_none_on_failure(self, mock_post):
         assert summarizer.summarize("some text") is None
 
+    def test_prompt_includes_content(self):
+        with patch("summarizer.requests.post") as mock_post:
+            mock_post.return_value = MagicMock()
+            mock_post.return_value.json.return_value = {"response": "summary"}
+            summarizer.summarize("unique-marker-content-1234")
+            prompt = mock_post.call_args.kwargs["json"]["prompt"]
+            assert "unique-marker-content-1234" in prompt
+
     def test_truncates_long_content(self):
         long_text = "x" * 5000
         with patch("summarizer.requests.post") as mock_post:
