@@ -17,6 +17,16 @@ class TestExtractUrls:
         result = summarizer.extract_urls(text)
         assert result == ["https://a.com", "http://b.com"]
 
+    def test_slack_mrkdwn_link(self):
+        # Slack은 링크를 <url|표시텍스트> 형태로 전송
+        text = "<https://www.digitalmarketer.co.kr/insights/article|digitalmarketer.co.kr/insights/article>"
+        assert summarizer.extract_urls(text) == [
+            "https://www.digitalmarketer.co.kr/insights/article"
+        ]
+
+    def test_slack_bare_link_in_angle_brackets(self):
+        assert summarizer.extract_urls("<https://example.com/a>") == ["https://example.com/a"]
+
     def test_no_url_returns_empty(self):
         assert summarizer.extract_urls("no url here") == []
 

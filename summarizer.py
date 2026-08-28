@@ -11,7 +11,8 @@ from config import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT
 
 log = logging.getLogger("lunchbot")
 
-URL_PATTERN = re.compile(r"https?://\S+")
+# Slack은 링크를 <url|표시텍스트> 형태로 보내므로 |와 >에서 매칭 중단
+URL_PATTERN = re.compile(r"https?://[^\s|>]+")
 
 # 요약에 사용할 최대 글자 수 (너무 길면 LLM 컨텍스트 낭비)
 MAX_CONTENT_LENGTH = 3000
