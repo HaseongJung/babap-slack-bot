@@ -61,7 +61,7 @@ Socket Mode라 포트 매핑 불필요. `.env`는 compose가 자동 주입.
 | 항목 | 위치 | 기본 |
 |---|---|---|
 | 자동 포스팅 사용 | `config.py` `AUTO_POST_ENABLED` | True |
-| 자동 포스팅 시각 | `config.py` `POST_HOUR` | 11 |
+| 자동 포스팅 시각 | `config.py` `POST_HOUR`/`POST_MINUTE` | 11:15 |
 | 재시도 마감 | `config.py` `DEADLINE_HOUR` | 13 |
 | 재시도 간격(분) | `config.py` `RETRY_MIN` | 10 |
 | 재시도 최대 횟수 | `config.py` `RETRY_MAX` | 2 |

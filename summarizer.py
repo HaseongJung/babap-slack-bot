@@ -82,12 +82,16 @@ def handle_url_message(text: str) -> tuple[str, str] | None:
         return None
 
     url = urls[0]
+    log.info("URL 요약 시작: %s", url)
     content = fetch_content(url)
     if content is None:
+        log.warning("본문 추출 실패, 요약 생략: %s", url)
         return None
 
+    log.info("본문 수집 완료: %s (%d자)", url, len(content))
     summary = summarize(content)
     if summary is None:
         return None
 
+    log.info("URL 요약 완료: %s", url)
     return url, summary

@@ -43,6 +43,7 @@ SLACK_CHANNEL_ID = os.environ["SLACK_CHANNEL_ID"]
 
 AUTO_POST_ENABLED = True
 POST_HOUR = 11       # 매일 자동 포스팅 시각
+POST_MINUTE = 15
 DEADLINE_HOUR = 12   # 이 시각부터는 재시도 안 함
 RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
 RETRY_MAX = 2        # 재시도 최대 횟수 (초기 1회 + 2회 = 하루 최대 3회 시도)

@@ -20,6 +20,7 @@ from config import (
     KR_HOLIDAYS,
     MENU_IMAGE_INDEX,
     POST_HOUR,
+    POST_MINUTE,
     RETRY_MAX,
     RETRY_MIN,
     SLACK_APP_TOKEN,
@@ -68,8 +69,8 @@ def next_post_time(state: dict, now: datetime) -> datetime:
     today = now.date()
     done = state.get("lunch") == today.isoformat() or now.hour >= DEADLINE_HOUR
     if done or not is_business_day(today):
-        return datetime.combine(next_business_day(today), dtime(POST_HOUR), tzinfo=KST)
-    return max(datetime.combine(today, dtime(POST_HOUR), tzinfo=KST), now)
+        return datetime.combine(next_business_day(today), dtime(POST_HOUR, POST_MINUTE), tzinfo=KST)
+    return max(datetime.combine(today, dtime(POST_HOUR, POST_MINUTE), tzinfo=KST), now)
 
 
 def next_after(ok: bool, now: datetime, fails: int = 0) -> datetime:
@@ -79,7 +80,7 @@ def next_after(ok: bool, now: datetime, fails: int = 0) -> datetime:
     """
     if not ok and now.hour < DEADLINE_HOUR and fails <= RETRY_MAX:
         return now + timedelta(minutes=RETRY_MIN)
-    return datetime.combine(next_business_day(now.date()), dtime(POST_HOUR), tzinfo=KST)
+    return datetime.combine(next_business_day(now.date()), dtime(POST_HOUR, POST_MINUTE), tzinfo=KST)
 
 
 def post_menu(menu_key: str = "lunch") -> tuple[bool, str]:
@@ -167,6 +168,13 @@ def scheduler_loop() -> None:
         now = datetime.now(tz=KST)
         if now < next_run:
             time.sleep(min((next_run - now).total_seconds(), 60))
+            continue
+        if load_state().get("lunch") == now.date().isoformat():
+            log.info("오늘은 이미 (수동으로) 보냄, 자동 포스팅 스킵")
+            next_run = datetime.combine(
+                next_business_day(now.date()), dtime(POST_HOUR, POST_MINUTE), tzinfo=KST
+            )
+            fails = 0
             continue
         log.info("자동 포스팅 시도")
         try:
