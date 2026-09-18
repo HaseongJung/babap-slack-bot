@@ -70,6 +70,28 @@ class TestFetchContent:
     def test_returns_none_on_fetch_failure(self, mock_get):
         assert summarizer.fetch_content("https://example.com") is None
 
+    def test_follows_naver_blog_main_frame_iframe(self):
+        # 네이버 블로그 frameset 껍데기: 실제 글은 iframe#mainFrame src에 있음
+        shell_html = (
+            '<html><body><iframe id="mainFrame" name="mainFrame" '
+            'src="/PostView.naver?blogId=x&logNo=1"></iframe></body></html>'
+        )
+        with patch("summarizer.requests.get") as mock_get, \
+             patch("summarizer.trafilatura.extract") as mock_extract:
+            mock_get.side_effect = [_fake_response(shell_html), _fake_response("<html>real post</html>")]
+            mock_extract.side_effect = [None, "A" * 100]
+
+            result = summarizer.fetch_content("https://blog.naver.com/x/1")
+
+            assert result == "A" * 100
+            assert mock_get.call_args_list[1].args[0] == "https://blog.naver.com/PostView.naver?blogId=x&logNo=1"
+
+    def test_shell_without_main_frame_iframe_returns_none(self):
+        with patch("summarizer.requests.get") as mock_get, \
+             patch("summarizer.trafilatura.extract", return_value=None):
+            mock_get.return_value = _fake_response("<html><body>no iframe here</body></html>")
+            assert summarizer.fetch_content("https://example.com") is None
+
 
 class TestSummarize:
     @patch("summarizer.requests.post")

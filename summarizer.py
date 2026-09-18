@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+from urllib.parse import urljoin
 
 import trafilatura
 from curl_cffi import requests
@@ -17,24 +18,41 @@ URL_PATTERN = re.compile(r"https?://[^\s|>]+")
 # 요약에 사용할 최대 글자 수 (너무 길면 LLM 컨텍스트 낭비)
 MAX_CONTENT_LENGTH = 3000
 
+# 네이버 블로그 등: 실제 글이 없는 frameset 껍데기 페이지고, 진짜 본문은
+# <iframe id="mainFrame" src="..."> 안에 있는 구조 대응
+MAIN_FRAME_SRC = re.compile(r'<iframe[^>]+id=["\']mainFrame["\'][^>]*\ssrc=["\']([^"\']+)["\']', re.IGNORECASE)
+
 
 def extract_urls(text: str) -> list[str]:
     """메시지 텍스트에서 URL 목록을 반환."""
     return URL_PATTERN.findall(text)
 
 
-def fetch_content(url: str) -> str | None:
-    """URL에서 본문 텍스트를 추출. 실패하면 None."""
+def _get_html(url: str) -> str | None:
     try:
         resp = requests.get(url, impersonate="chrome", timeout=15)
         resp.raise_for_status()
     except Exception:
         log.warning("URL 수집 실패: %s", url, exc_info=True)
         return None
+    return resp.text
 
-    text = trafilatura.extract(resp.text)
-    if not text or len(text.strip()) < 50:
+
+def fetch_content(url: str) -> str | None:
+    """URL에서 본문 텍스트를 추출. 실패하면 None."""
+    html = _get_html(url)
+    if html is None:
         return None
+
+    text = trafilatura.extract(html)
+    if not text or len(text.strip()) < 50:
+        m = MAIN_FRAME_SRC.search(html)
+        if not m:
+            return None
+        frame_html = _get_html(urljoin(url, m.group(1)))
+        text = trafilatura.extract(frame_html) if frame_html else None
+        if not text or len(text.strip()) < 50:
+            return None
     return text
 
 
