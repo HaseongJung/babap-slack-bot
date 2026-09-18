@@ -32,7 +32,7 @@ TODAY = date(2026, 8, 21)
 
 
 def test_parse_finds_today_barunbabsang():
-    a = parse_article_list(LIST_JSON, TODAY)
+    a = parse_article_list(LIST_JSON, TODAY, "바른밥상")
     assert a == Article(
         article_id=5298,
         subject="8월 21일 판교이노베이션랩 \"바른밥상\" 오늘의 메뉴",
@@ -43,11 +43,39 @@ def test_parse_finds_today_barunbabsang():
 def test_parse_skips_other_restaurant_and_yesterday():
     items = LIST_JSON["result"]["articleList"]
     data = {"result": {"articleList": [items[0], items[2]]}}  # 타 식당 + 어제 바른밥상
-    assert parse_article_list(data, TODAY) is None
+    assert parse_article_list(data, TODAY, "바른밥상") is None
 
 
 def test_parse_empty_list():
-    assert parse_article_list({"result": {"articleList": []}}, TODAY) is None
+    assert parse_article_list({"result": {"articleList": []}}, TODAY, "바른밥상") is None
+
+
+# 정겨운맛풍경: 판교트라이타워점 vs 경기기업성장센터점 이름 충돌 케이스
+JEONGGYEOUN_LIST_JSON = {
+    "result": {
+        "articleList": [
+            {"type": "ARTICLE", "item": {
+                "articleId": 5455,
+                "subject": "9월 18일 경기기업성장센터 2층 \"정겨운맛풍경\" 오늘 메뉴",
+                "writeDateTimestamp": 1789697000000,
+            }},
+            {"type": "ARTICLE", "item": {
+                "articleId": 5450,
+                "subject": "9월18일 판교트라이타워 2층 '정겨운맛풍경' 오늘 메뉴",
+                "writeDateTimestamp": 1789691611380,
+            }},
+        ]
+    }
+}
+JEONGGYEOUN_TODAY = date(2026, 9, 18)
+
+
+def test_parse_jeonggyeoun_keyword_avoids_other_branch():
+    a = parse_article_list(JEONGGYEOUN_LIST_JSON, JEONGGYEOUN_TODAY, "판교트라이타워")
+    assert a == Article(
+        article_id=5450,
+        subject="9월18일 판교트라이타워 2층 '정겨운맛풍경' 오늘 메뉴",
+    )
 
 
 CONTENT_HTML = """<div class="se-viewer">
@@ -77,35 +105,37 @@ import menu
 
 
 def test_collect_returns_none_when_no_article(monkeypatch):
-    monkeypatch.setattr(menu, "find_today_article", lambda s: None)
-    assert menu.collect() is None
+    monkeypatch.setattr(menu, "find_today_article", lambda s, keyword: None)
+    assert menu.collect("barun") is None
 
 
-def test_collect_wires_find_download(monkeypatch):
+def test_collect_selects_single_image_by_source_menu_key(monkeypatch):
     art = menu.Article(5298, "오늘의 메뉴")
-    monkeypatch.setattr(menu, "find_today_article", lambda s: art)
-    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1", "u2"])
-    monkeypatch.setattr(menu, "download_images", lambda s, urls: [Path("/tmp/a"), Path("/tmp/b")])
-    assert menu.collect() == (art, [Path("/tmp/a"), Path("/tmp/b")])
-
-
-def test_collect_selects_single_image_by_index(monkeypatch):
-    art = menu.Article(5298, "오늘의 메뉴")
-    monkeypatch.setattr(menu, "find_today_article", lambda s: art)
+    monkeypatch.setattr(menu, "find_today_article", lambda s, keyword: art)
     monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1", "u2", "u3", "u4"])
     seen = []
-    monkeypatch.setattr(menu, "download_images", lambda s, urls: seen.append(urls) or [Path("/tmp/only")])
-    assert menu.collect(image_index=2) == (art, [Path("/tmp/only")])
-    assert seen == [["u3"]]
+    monkeypatch.setattr(menu, "download_images", lambda s, urls, prefix="lunch": seen.append(urls) or [Path("/tmp/only")])
+    assert menu.collect("barun", "lunch") == (art, [Path("/tmp/only")])
+    assert seen == [["u3"]]  # 바른밥상 lunch = 3번째 이미지(0-based 2)
 
 
-def test_collect_out_of_range_index_yields_no_images(monkeypatch):
-    art = menu.Article(5298, "오늘의 메뉴")
-    monkeypatch.setattr(menu, "find_today_article", lambda s: art)
-    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1", "u2", "u3"])
+def test_collect_single_image_source(monkeypatch):
+    art = menu.Article(5450, "정겨운맛풍경")
+    monkeypatch.setattr(menu, "find_today_article", lambda s, keyword: art)
+    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1"])
     seen = []
-    monkeypatch.setattr(menu, "download_images", lambda s, urls: seen.append(urls) or [])
-    assert menu.collect(image_index=3) == (art, [])
+    monkeypatch.setattr(menu, "download_images", lambda s, urls, prefix="lunch": seen.append(urls) or [Path("/tmp/only")])
+    assert menu.collect("jeonggyeoun", "lunch") == (art, [Path("/tmp/only")])
+    assert seen == [["u1"]]
+
+
+def test_collect_unmapped_menu_key_yields_no_images(monkeypatch):
+    art = menu.Article(5450, "정겨운맛풍경")
+    monkeypatch.setattr(menu, "find_today_article", lambda s, keyword: art)
+    monkeypatch.setattr(menu, "get_image_urls", lambda s, a: ["u1"])
+    seen = []
+    monkeypatch.setattr(menu, "download_images", lambda s, urls, prefix="lunch": seen.append(urls) or [])
+    assert menu.collect("jeonggyeoun", "dinner") == (art, [])  # jeonggyeoun엔 dinner 매핑 없음
     assert seen == [[]]
 
 

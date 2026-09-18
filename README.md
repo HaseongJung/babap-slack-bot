@@ -1,8 +1,10 @@
-# 바른밥상 점심메뉴 Slack 봇
+# 점심메뉴 Slack 봇
 
-네이버 카페 '2판교 라이프'의 바른밥상 오늘 메뉴 글을 Slack 채널에 올린다.
-`/lunch` = 점심 메뉴(3번째 사진), `/dinner` = 저녁 메뉴(4번째 사진) 수동 호출.
-매일 영업일 11:00 KST에 점심만 자동 발송 (`config.py` `AUTO_POST_ENABLED=True`).
+네이버 카페 '2판교 라이프'의 바른밥상 · 정겨운맛풍경(판교트라이타워점) 오늘 메뉴 글을
+Slack 채널에 올린다.
+`/lunch` = 바른밥상 점심(3번째 사진), `/dinner` = 바른밥상 저녁(4번째 사진),
+`/lunch2` = 정겨운맛풍경(판교트라이타워) 점심 수동 호출.
+매일 영업일 11:15 KST에 두 소스 점심을 각각 자동 발송 (`config.py` `AUTO_POST_ENABLED=True`).
 
 ## 실행 (Windows 테스트 / Mac Studio 동일)
 
@@ -19,7 +21,7 @@
 1. [api.slack.com/apps](https://api.slack.com/apps)에서 새 앱 생성
 2. Socket Mode 활성화 → App-Level Token 생성 (`connections:write` 스코프) = `SLACK_APP_TOKEN`
 3. Bot Token Scopes: `chat:write`, `files:write`, `commands`
-4. Slash Command 생성: `/lunch`, `/dinner`
+4. Slash Command 생성: `/lunch`, `/dinner`, `/lunch2`
 5. 봇을 대상 채널에 초대
 
 Socket Mode라 공인 URL/포트 불필요.
@@ -65,7 +67,7 @@ Socket Mode라 포트 매핑 불필요. `.env`는 compose가 자동 주입.
 | 재시도 마감 | `config.py` `DEADLINE_HOUR` | 13 |
 | 재시도 간격(분) | `config.py` `RETRY_MIN` | 10 |
 | 재시도 최대 횟수 | `config.py` `RETRY_MAX` | 2 |
-| 점심/저녁 이미지 순번 | `config.py` `MENU_IMAGE_INDEX` | lunch=2, dinner=3 (0-based) |
-| 대상 식당 키워드 | `config.py` `KEYWORD` | 바른밥상 |
+| 소스별 키워드·이미지 순번 | `config.py` `SOURCES` | barun(바른밥상): lunch=2, dinner=3 / jeonggyeoun(판교트라이타워): lunch=0 (0-based) |
+| 자동 발송 대상 소스 | `config.py` `AUTO_SOURCES` | barun, jeonggyeoun |
 
 로그: 콘솔 + `bot.log`. 중복방지 상태: `state/state.json` (디렉터리 마운트).

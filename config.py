@@ -48,10 +48,6 @@ DEADLINE_HOUR = 12   # 이 시각부터는 재시도 안 함
 RETRY_MIN = 10       # 글 발견 실패 시 재시도 간격(분)
 RETRY_MAX = 2        # 재시도 최대 횟수 (초기 1회 + 2회 = 하루 최대 3회 시도)
 
-# ── 메뉴 이미지 매핑 ────────────────────────────────────────
-
-MENU_IMAGE_INDEX = {"lunch": 2, "dinner": 3}  # 0-based
-
 # ── 상태 파일 ──────────────────────────────────────────────
 
 STATE_PATH = Path(__file__).with_name("state") / "state.json"
@@ -60,7 +56,21 @@ STATE_PATH = Path(__file__).with_name("state") / "state.json"
 
 CAFE_ID = 30487307
 MENU_ID = 26
-KEYWORD = "바른밥상"  # ponytail: 타 식당 추가 시 이 키워드 목록만 손대면 됨
+
+# 소스별 제목 매칭 키워드 + 게시글 내 이미지 순서(0-based).
+# 둘 다 같은 카페/게시판(위 CAFE_ID·MENU_ID)에 각자 다른 글로 올라온다.
+SOURCES = {
+    "barun": {
+        "keyword": "바른밥상",
+        "image_index": {"lunch": 2, "dinner": 3},
+    },
+    "jeonggyeoun": {
+        # '정겨운맛풍경'만 쓰면 경기기업성장센터 2층 지점 글과 겹치므로 '판교트라이타워'로 구분
+        "keyword": "판교트라이타워",
+        "image_index": {"lunch": 0},
+    },
+}
+AUTO_SOURCES = ["barun", "jeonggyeoun"]  # 매일 자동 발송 대상(각각 lunch)
 
 LIST_URL = (
     f"https://apis.naver.com/cafe-web/cafe-boardlist-api/v1/cafes/{CAFE_ID}"
